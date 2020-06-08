@@ -1,0 +1,152 @@
+# 필요한 라이브러리 다운로드
+# pytorch를 활용한 딥러닝
+
+import torch
+import numpy as np
+from torch.autograd import Variable
+from torch.utils.data import Dataset,DataLoader
+import matplotlib.pyplot as plt
+
+
+# dataset을 만들자.
+
+class CoordinateDataset(Dataset):   
+    def __init__(self):
+        #Enter the address of data
+        csvData=np.loadtxt('C:/Users/sksms/Desktop/BioStatics/data_spiral.csv',delimiter=',',dtype=np.float32)
+        self.len=csvData.shape[0]
+        self.X=torch.from_numpy(csvData[:,:2]) #coordinates
+        self.Y=torch.from_numpy(csvData[:,-1]).type(torch.LongTensor) #class
+        
+    def __getitem__(self,index):
+        return self.X[index], self.Y[index]
+    
+    def __len__(self):
+        return self.len
+
+dataset = CoordinateDataset()
+train_loader = DataLoader(dataset = dataset,
+                         batch_size=32, # 배치 사이즈
+                         shuffle=True,
+                         num_workers=0)
+
+#Display the data
+# 데이터를 좌표평면에 나타내보기.
+
+#Enter the address of data
+data=np.loadtxt('C:/Users/sksms/Desktop/BioStatics/data_spiral.csv',delimiter=',',dtype=np.float32)
+
+zeroData=np.zeros((400,2))
+oneData=np.zeros((400,2))
+
+for i in range(data.shape[0]):
+  if (data[i,-1]==0):
+    zeroData[i,0]=data[i,0]
+    zeroData[i,1]=data[i,1]
+  else:
+    oneData[i,0]=data[i,0]
+    oneData[i,1]=data[i,1]
+
+plt.scatter(zeroData[:,0],zeroData[:,1],c='r')
+plt.scatter(oneData[:,0],oneData[:,1],c='b')
+plt.show()
+
+
+# Make a model
+# 모델 정의하기
+
+class Net(torch.nn.Module):
+    
+    def __init__(self):
+        super(Net,self).__init__()
+        self.relu = torch.nn.ReLU()
+        self.tanh = torch.nn.Tanh()
+        self.l1=torch.nn.Linear(2,16)
+        self.l2=torch.nn.Linear(16,8)
+        self.l3=torch.nn.Linear(8,2)        
+        
+        
+    def forward(self,x):
+        x = self.tanh(self.l1(x)) # 활성화함수 tanh, relu
+        x = self.relu(self.l2(x))
+
+        return x
+
+model = Net()
+
+criterion = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
+X1=np.zeros(200)
+X2=np.zeros(200)
+
+# Training loop
+print("START EPOCH")
+for epoch in range(200): # epoch 또는 iteration: 200번 반복
+    if epoch%50==0:
+        print("EPOCH : {} / 200".format(epoch))
+    for i, data in enumerate(train_loader):
+        inputs, labels = data
+        inputs, labels = Variable(inputs), Variable(labels)
+
+        y_pred = model(inputs)
+
+        loss = criterion(y_pred, labels)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        X1[epoch]=epoch
+        X2[epoch]=loss
+        
+        
+print("END")
+
+plt.plot(X1,X2)
+plt.show() #epoch number에 따른 loss function plot
+
+
+#Make a test set and display results
+#Test set consists of 200*200 points
+
+testData = np.zeros((200*200,2))
+twoD = np.linspace(-10,10,200)
+a=0
+for i in range(200):
+  for j in range(200):
+    testData[a,0]=twoD[j,]
+    testData[a,1]=twoD[i,]
+    a=a+1
+testData = torch.from_numpy(np.float32(testData))
+
+redX = []
+redY = []
+blueX = []
+blueY = []
+
+for i, data in enumerate(train_loader):
+        # get the inputs
+        inputs, labels = data
+        # wrap them in Variable
+        inputs, labels = Variable(inputs), Variable(labels)
+
+        # Forward pass: Compute predicted y by passing x to the model
+        testPred = model(testData)
+        
+        # Compute and print loss
+        v,r = testPred.max(1)
+        r = (r.detach().cpu().numpy())
+        coor = (testData.detach().cpu().numpy())
+
+        for j in range(len(r)):
+          if (r[j]==0):
+            redX.append(coor[j][0])
+            redY.append(coor[j][1])
+          else:
+            blueX.append(coor[j][0])
+            blueY.append(coor[j][1])
+
+plt.scatter(redX, redY, c='r')
+plt.scatter(blueX, blueY, c='b')
+plt.show() #데이터의 경계를 색으로 나타냄.
+
+
+
